@@ -10,6 +10,7 @@ contract Crowdfund is ReentrancyGuard, Ownable {
   uint256 public minContribution;
   uint256 public totalCollected = 0;
   bool public isCancelled = false;
+  bool internal isWithdrawn = false;
   mapping(address => uint256) public contributions;
 
   event CampaignCreated(
@@ -41,14 +42,10 @@ contract Crowdfund is ReentrancyGuard, Ownable {
 
   function contribute() external payable nonReentrant {
     require(!isCancelled, 'Campaign is cancelled');
-    if (minContribution == 0) {
-      require(msg.value > 0, 'Contribution must be greater than 0 wei');
-    } else {
-      require(
-        msg.value >= minContribution,
-        'Contribution must be greater than or equal to min contribution'
-      );
-    }
+    require(
+      msg.value > 0 && msg.value >= minContribution,
+      'Contribution must be greater than or equal to min contribution'
+    );
     require(goal > totalCollected, 'Campaign is over');
     require(block.timestamp < deadline, 'Campaign is over');
 
@@ -59,13 +56,15 @@ contract Crowdfund is ReentrancyGuard, Ownable {
   }
 
   function withdrawFunds() external onlyOwner nonReentrant {
-    require(totalCollected >= goal, 'No funds to withdraw');
+    require(!isWithdrawn, 'Funds already withdrawn');
+    require(totalCollected >= goal, 'Goal is not reached');
 
     address payable _owner = payable(msg.sender);
-    _owner.transfer(address(this).balance);
+    bool success = _owner.send(address(this).balance);
+    require(success, 'Failed to withdraw funds');
 
+    isWithdrawn = true;
     emit FundsWithdrawn(msg.sender, totalCollected);
-    totalCollected = 0;
   }
 
   function refund() external nonReentrant {
@@ -80,8 +79,6 @@ contract Crowdfund is ReentrancyGuard, Ownable {
 
     emit RefundIssued(msg.sender, contributions[msg.sender]);
     contributions[msg.sender] = 0;
-    // not setting totalCollected to 0
-    //  so that people can see how much the crowdfund raised
   }
 
   function extendDeadline(uint256 _newDeadline) external onlyOwner {

@@ -47,9 +47,8 @@ describe('Crowdfund', () => {
     });
 
     it('Should set the right parameters', async () => {
-      const { crowdfund, goal, minAmount, deadline } = await loadFixture(
-        deployFixture
-      );
+      const { crowdfund, goal, minAmount, deadline } =
+        await loadFixture(deployFixture);
       expect(await crowdfund.goal()).to.equal(goal, 'Invalid goal');
       expect(await crowdfund.deadline()).to.equal(deadline, 'Invalid deadline');
       expect(await crowdfund.minContribution()).to.equal(
@@ -87,9 +86,8 @@ describe('Crowdfund', () => {
 
   describe('Contribute', async () => {
     it('Should allow contribution', async () => {
-      const { crowdfund, account1, minAmount } = await loadFixture(
-        deployFixture
-      );
+      const { crowdfund, account1, minAmount } =
+        await loadFixture(deployFixture);
 
       const acc1BalanceBefore = await hre.ethers.provider.getBalance(
         account1.address
@@ -123,9 +121,8 @@ describe('Crowdfund', () => {
     });
 
     it('Should revert if campaign is cancelled', async () => {
-      const { crowdfund, minAmount, account1 } = await loadFixture(
-        deployFixture
-      );
+      const { crowdfund, minAmount, account1 } =
+        await loadFixture(deployFixture);
       await crowdfund.cancelCampaign();
 
       await expect(
@@ -150,13 +147,14 @@ describe('Crowdfund', () => {
 
       await expect(
         crowdfund.connect(account1).contribute({ value: 0 })
-      ).to.be.revertedWith('Contribution must be greater than 0 wei');
+      ).to.be.revertedWith(
+        'Contribution must be greater than or equal to min contribution'
+      );
     });
 
     it('Should revert if msg.value < minContribution', async () => {
-      const { crowdfund, minAmount, account1 } = await loadFixture(
-        deployFixture
-      );
+      const { crowdfund, minAmount, account1 } =
+        await loadFixture(deployFixture);
       const smallValue = minAmount - 1n;
 
       await expect(
@@ -167,9 +165,8 @@ describe('Crowdfund', () => {
     });
 
     it('Should revert if campaign goal is already met', async () => {
-      const { crowdfund, goal, minAmount, account1 } = await loadFixture(
-        deployFixture
-      );
+      const { crowdfund, goal, minAmount, account1 } =
+        await loadFixture(deployFixture);
       await crowdfund.connect(account1).contribute({ value: goal });
 
       await expect(
@@ -178,9 +175,8 @@ describe('Crowdfund', () => {
     });
 
     it('Should revert if current time is past deadline', async () => {
-      const { crowdfund, minAmount, deadline, account1 } = await loadFixture(
-        deployFixture
-      );
+      const { crowdfund, minAmount, deadline, account1 } =
+        await loadFixture(deployFixture);
       await time.increase(deadline + 1);
 
       await expect(
@@ -208,26 +204,44 @@ describe('Crowdfund', () => {
         goal,
         'Invalid contribution from account2'
       );
-      expect(await crowdfund.totalCollected()).to.equal(
-        0n,
-        'Invalid totalCollected'
+    });
+
+    it("Shouldn't allow owner to withdrawc twice", async () => {
+      const { crowdfund, owner, goal, minAmount, account1, account2 } =
+        await loadFixture(deployFixture);
+      await crowdfund.connect(account1).contribute({ value: minAmount });
+      await crowdfund.connect(account2).contribute({ value: goal });
+
+      await expect(crowdfund.withdrawFunds())
+        .to.emit(crowdfund, 'FundsWithdrawn')
+        .withArgs(owner.address, goal + minAmount);
+
+      await expect(crowdfund.withdrawFunds()).to.be.revertedWith(
+        'Funds already withdrawn'
+      );
+
+      expect(await crowdfund.contributions(account1.address)).to.equal(
+        minAmount,
+        'Invalid contribution from account1'
+      );
+      expect(await crowdfund.contributions(account2.address)).to.equal(
+        goal,
+        'Invalid contribution from account2'
       );
     });
 
     it('Should revert if totalCollected < goal', async () => {
-      const { crowdfund, minAmount, account1 } = await loadFixture(
-        deployFixture
-      );
+      const { crowdfund, minAmount, account1 } =
+        await loadFixture(deployFixture);
       await crowdfund.connect(account1).contribute({ value: minAmount });
       await expect(crowdfund.withdrawFunds()).to.be.revertedWith(
-        'No funds to withdraw'
+        'Goal is not reached'
       );
     });
 
     it('Should revert if not owner', async () => {
-      const { crowdfund, goal, account1, account2 } = await loadFixture(
-        deployFixture
-      );
+      const { crowdfund, goal, account1, account2 } =
+        await loadFixture(deployFixture);
       await crowdfund.connect(account1).contribute({ value: goal });
       await expect(crowdfund.connect(account2).withdrawFunds())
         .to.be.revertedWithCustomError(crowdfund, 'OwnableUnauthorizedAccount')
@@ -237,9 +251,8 @@ describe('Crowdfund', () => {
 
   describe('Refund', async () => {
     it('Should allow contributor to refund', async () => {
-      const { crowdfund, deadline, minAmount, account1 } = await loadFixture(
-        deployFixture
-      );
+      const { crowdfund, deadline, minAmount, account1 } =
+        await loadFixture(deployFixture);
       await crowdfund.connect(account1).contribute({ value: minAmount * 2n });
       const contributorBalanceBefore = await hre.ethers.provider.getBalance(
         account1.address
@@ -291,9 +304,8 @@ describe('Crowdfund', () => {
     });
 
     it('Should revert if campaign is not cancelled and deadline not yet passed', async () => {
-      const { crowdfund, account1, minAmount } = await loadFixture(
-        deployFixture
-      );
+      const { crowdfund, account1, minAmount } =
+        await loadFixture(deployFixture);
       await crowdfund.connect(account1).contribute({ value: minAmount });
       await expect(crowdfund.connect(account1).refund()).to.be.revertedWith(
         'Campaign is not over yet'
@@ -301,9 +313,8 @@ describe('Crowdfund', () => {
     });
 
     it('Should revert if caller has no contributions', async () => {
-      const { crowdfund, account1, account2, minAmount } = await loadFixture(
-        deployFixture
-      );
+      const { crowdfund, account1, account2, minAmount } =
+        await loadFixture(deployFixture);
 
       await crowdfund.connect(account1).contribute({ value: minAmount });
       await time.increase(24 * 60 * 60 + 1);
